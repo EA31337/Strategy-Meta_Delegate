@@ -1,4 +1,4 @@
-# Strategy Meta Conditions
+# Strategy Meta Delegate
 
 [![Status][gha-image-check-master]][gha-link-check-master]
 [![Status][gha-image-compile-master]][gha-link-compile-master]
@@ -7,8 +7,8 @@
 [![License][license-image]][license-link]
 [![Edit][gh-edit-badge]][gh-edit-link]
 
-Conditions meta strategy trades with different strategies
-based on the selected conditions.
+Delegate meta strategy trades by delegating orders
+to different strategy based on the order condition.
 
 ## Dependencies
 
@@ -22,12 +22,12 @@ based on the selected conditions.
 [gh-discuss-link]: https://github.com/EA31337/EA31337-Strategies/discussions
 
 [gh-edit-badge]: https://img.shields.io/badge/GitHub-edit-purple.svg?logo=github
-[gh-edit-link]: https://github.dev/EA31337/Strategy-Meta_Conditions
+[gh-edit-link]: https://github.dev/EA31337/Strategy-Meta_Delegate
 
-[gha-link-check-master]: https://github.com/EA31337/Strategy-Meta_Conditions/actions?query=workflow:Check+branch%3Amaster
-[gha-image-check-master]: https://github.com/EA31337/Strategy-Meta_Conditions/workflows/Check/badge.svg?branch=master
-[gha-link-compile-master]: https://github.com/EA31337/Strategy-Meta_Conditions/actions?query=workflow:Compile+branch%3Amaster
-[gha-image-compile-master]: https://github.com/EA31337/Strategy-Meta_Conditions/workflows/Compile/badge.svg?branch=master
+[gha-link-check-master]: https://github.com/EA31337/Strategy-Meta_Delegate/actions?query=workflow:Check+branch%3Amaster
+[gha-image-check-master]: https://github.com/EA31337/Strategy-Meta_Delegate/workflows/Check/badge.svg?branch=master
+[gha-link-compile-master]: https://github.com/EA31337/Strategy-Meta_Delegate/actions?query=workflow:Compile+branch%3Amaster
+[gha-image-compile-master]: https://github.com/EA31337/Strategy-Meta_Delegate/workflows/Compile/badge.svg?branch=master
 
 [tg-channel-image]: https://img.shields.io/badge/Telegram-join-0088CC.svg?logo=telegram
 [tg-channel-link]: https://t.me/EA31337

@@ -10,4 +10,4 @@
  */
 
 // Includes the main code.
-#include "Stg_Meta_Conditions.mq5"
+#include "Stg_Meta_Delegate.mq5"
