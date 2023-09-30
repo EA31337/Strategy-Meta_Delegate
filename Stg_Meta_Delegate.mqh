@@ -8,28 +8,20 @@
 #define STG_META_DELEGATE_MQH
 
 // Trade conditions.
-enum ENUM_STG_DELEGATE_CONDITION {
-  STG_DELEGATE_COND_0_NONE = 0,                      // None
-  STG_DELEGATE_COND_IS_PEAK = TRADE_COND_IS_PEAK,    // Market is at peak level
-  STG_DELEGATE_COND_IS_PIVOT = TRADE_COND_IS_PIVOT,  // Market is in pivot levels
-  // STG_DELEGATE_COND_ORDERS_PROFIT_GT_01PC = TRADE_COND_ORDERS_PROFIT_GT_01PC,  // Equity > 1%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_LT_01PC = TRADE_COND_ORDERS_PROFIT_LT_01PC,  // Equity < 1%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_GT_02PC = TRADE_COND_ORDERS_PROFIT_GT_02PC,  // Equity > 2%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_LT_02PC = TRADE_COND_ORDERS_PROFIT_LT_02PC,  // Equity < 2%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_GT_05PC = TRADE_COND_ORDERS_PROFIT_GT_05PC,  // Equity > 5%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_LT_05PC = TRADE_COND_ORDERS_PROFIT_LT_05PC,  // Equity < 5%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_GT_10PC = TRADE_COND_ORDERS_PROFIT_GT_10PC,  // Equity > 10%
-  // STG_DELEGATE_COND_ORDERS_PROFIT_LT_10PC = TRADE_COND_ORDERS_PROFIT_LT_10PC,  // Equity < 10%
+enum ENUM_STG_META_DELEGATE_CONDITION {
+  STG_META_DELEGATE_COND_0_NONE = 0,            // None
+  STG_META_DELEGATE_COND_ORDER_DATETIME_EOD,    // End of day
+  STG_META_DELEGATE_COND_ORDER_LIFETIME_GT_1D,  // Order opened over a day
 };
 
 // User input params.
 INPUT2_GROUP("Meta Delegate strategy: main params");
-INPUT2 ENUM_STG_DELEGATE_CONDITION Meta_Delegate_Condition1 = STG_DELEGATE_COND_IS_PEAK;   // Trade condition 1
-INPUT2 ENUM_STRATEGY Meta_Delegate_Strategy1 = STRAT_AMA;                                  // Strategy 1 on condition 1
-INPUT2 ENUM_STG_DELEGATE_CONDITION Meta_Delegate_Condition2 = STG_DELEGATE_COND_IS_PIVOT;  // Trade condition 2
-INPUT2 ENUM_STRATEGY Meta_Delegate_Strategy2 = STRAT_MA_TREND;                             // Strategy 2 on condition 2
-INPUT2 ENUM_STG_DELEGATE_CONDITION Meta_Delegate_Condition3 = STG_DELEGATE_COND_0_NONE;    // Trade condition 3
-INPUT2 ENUM_STRATEGY Meta_Delegate_Strategy3 = STRAT_NONE;                                 // Strategy 3 on condition 3
+INPUT2 uint Meta_Delegate_MagicNo_Min = 30000;                 // Magic number range (min) to monitor
+INPUT2 uint Meta_Delegate_MagicNo_Max = 40000;                 // Magic number range (max) to monitor
+INPUT2 ENUM_STRATEGY Meta_Delegate_Strategy_Main = STRAT_AMA;  // Main strategy
+INPUT2 ENUM_STG_META_DELEGATE_CONDITION Meta_Delegate_Condition =
+    STG_META_DELEGATE_COND_ORDER_LIFETIME_GT_1D;                   // Order condition to delegate
+INPUT2 ENUM_STRATEGY Meta_Delegate_Strategy_Delegate = STRAT_AMA;  // Strategy to delegate
 INPUT2_GROUP("Meta Delegate strategy: common params");
 INPUT2 float Meta_Delegate_LotSize = 0;                // Lot size
 INPUT2 int Meta_Delegate_SignalOpenMethod = 0;         // Signal open method
@@ -40,7 +32,7 @@ INPUT2 int Meta_Delegate_SignalOpenBoostMethod = 0;    // Signal open boost meth
 INPUT2 int Meta_Delegate_SignalCloseMethod = 0;        // Signal close method
 INPUT2 int Meta_Delegate_SignalCloseFilter = 32;       // Signal close filter (-127-127)
 INPUT2 float Meta_Delegate_SignalCloseLevel = 0;       // Signal close level
-INPUT2 int Meta_Delegate_PriceStopMethod = 0;          // Price limit method
+INPUT2 int Meta_Delegate_PriceStopMethod = 1;          // Price limit method
 INPUT2 float Meta_Delegate_PriceStopLevel = 2;         // Price limit level
 INPUT2 int Meta_Delegate_TickFilterMethod = 32;        // Tick filter method (0-255)
 INPUT2 float Meta_Delegate_MaxSpread = 4.0;            // Max spread to trade (in pips)
@@ -68,6 +60,7 @@ struct Stg_Meta_Delegate_Params_Defaults : StgParams {
 
 class Stg_Meta_Delegate : public Strategy {
  protected:
+  DictStruct<long, Ref<Order>> orders_active, orders_delegated;
   DictStruct<long, Ref<Strategy>> strats;
   Trade strade;  // Trade instance.
 
@@ -90,9 +83,8 @@ class Stg_Meta_Delegate : public Strategy {
    * Event on strategy's init.
    */
   void OnInit() {
-    StrategyAdd(Meta_Delegate_Strategy1, 1);
-    StrategyAdd(Meta_Delegate_Strategy2, 2);
-    StrategyAdd(Meta_Delegate_Strategy3, 3);
+    StrategyAdd(Meta_Delegate_Strategy_Main, 1);
+    StrategyAdd(Meta_Delegate_Strategy_Delegate, 2);
   }
 
   /**
@@ -300,47 +292,108 @@ class Stg_Meta_Delegate : public Strategy {
   }
 
   /**
-   * Check strategy's opening signal.
+   * Find new active orders (to monitor) by magic number.
    */
-  bool SignalOpen(ENUM_ORDER_TYPE _cmd, int _method, float _level = 0.0f, int _shift = 0) {
-    bool _result = false;
-    // uint _ishift = _indi.GetShift();
-    uint _ishift = _shift;
-    Ref<Strategy> _strat_ref;
-    if (!_result && Meta_Delegate_Condition1 != STG_DELEGATE_COND_0_NONE &&
-        strade.CheckCondition((ENUM_TRADE_CONDITION)Meta_Delegate_Condition1)) {
-      _strat_ref = strats.GetByKey(1);
-      if (_strat_ref.IsSet()) {
-        _level = _level == 0.0f ? _strat_ref.Ptr().Get<float>(STRAT_PARAM_SOL) : _level;
-        _method = _method == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SOM) : _method;
-        _shift = _shift == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SHIFT) : _shift;
-        _result |= _strat_ref.Ptr().SignalOpen(_cmd, _method, _level, _shift);
+  bool OrdersFindNewByMagic() {
+    ResetLastError();
+    unsigned long _smagic = Get<unsigned long>(TRADE_PARAM_MAGIC_NO);
+    int _total_active = TradeStatic::TotalActive();
+    for (int pos = 0; pos < _total_active; pos++) {
+      if (OrderStatic::SelectByPosition(pos)) {
+        unsigned long _omagic = OrderStatic::MagicNumber();
+        unsigned long _ticket = OrderStatic::Ticket();
+        if (orders_active.KeyExists(_omagic) || orders_delegated.KeyExists(_omagic)) {
+          // Ignore finding orders which were already added.
+          continue;
+        }
+        if (_omagic > ::Meta_Delegate_MagicNo_Min && _omagic < ::Meta_Delegate_MagicNo_Max) {
+          // if (_omagic != _smagic) {
+          Ref<Order> _order = new Order(_ticket);
+          orders_active.Set(_ticket, _order);
+          // }
+        }
       }
     }
-    if (!_result && Meta_Delegate_Condition2 != STG_DELEGATE_COND_0_NONE &&
-        strade.CheckCondition((ENUM_TRADE_CONDITION)Meta_Delegate_Condition2)) {
-      _strat_ref = strats.GetByKey(2);
-      if (_strat_ref.IsSet()) {
-        _level = _level == 0.0f ? _strat_ref.Ptr().Get<float>(STRAT_PARAM_SOL) : _level;
-        _method = _method == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SOM) : _method;
-        _shift = _shift == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SHIFT) : _shift;
-        _result |= _strat_ref.Ptr().SignalOpen(_cmd, _method, _level, _shift);
+    return GetLastError() == ERR_NO_ERROR;
+  }
+
+  /**
+   * Check conditions for active orders.
+   */
+  void OrdersActiveProcessConditions() {
+    Ref<Order> _order;
+    for (DictStructIterator<long, Ref<Order>> iter = orders_active.Begin(); iter.IsValid(); ++iter) {
+      _order = iter.Value();
+      long _order_time_opened = _order.Ptr().Get<long>(ORDER_TIME_SETUP);
+      DateTime _order_datetime(_order_time_opened);
+      switch (::Meta_Delegate_Condition) {
+        case STG_META_DELEGATE_COND_ORDER_DATETIME_EOD:
+          // _result |= _shift > 0 && _time_opened < GetChart().GetBarTime(_shift - 1);
+          // _result |= _order_time_opened >= GetChart().GetBarTime(_shift);
+          break;
+        case STG_META_DELEGATE_COND_ORDER_LIFETIME_GT_1D:
+          if (_order_time_opened > _order_time_opened + 86400) {
+            MqlTradeRequest _request = {(ENUM_TRADE_REQUEST_ACTIONS)0};
+            MqlTradeCheckResult _result_check = {0};
+            MqlTradeResult _result = {0};
+            _request.action = TRADE_ACTION_MODIFY;
+            // _order.OrderModify(_request);
+            // OrderSend(_request, _result, _result_check);
+          }
+          break;
       }
     }
-    if (!_result && Meta_Delegate_Condition3 != STG_DELEGATE_COND_0_NONE &&
-        strade.CheckCondition((ENUM_TRADE_CONDITION)Meta_Delegate_Condition3)) {
-      _strat_ref = strats.GetByKey(3);
-      if (_strat_ref.IsSet()) {
-        _level = _level == 0.0f ? _strat_ref.Ptr().Get<float>(STRAT_PARAM_SOL) : _level;
-        _method = _method == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SOM) : _method;
-        _shift = _shift == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SHIFT) : _shift;
-        _result |= _strat_ref.Ptr().SignalOpen(_cmd, _method, _level, _shift);
-      }
+  }
+
+  /**
+   * Event on new time periods.
+   */
+  virtual void OnPeriod(unsigned int _periods = DATETIME_NONE) {
+    if ((_periods & DATETIME_MINUTE) != 0) {
+      // New minute started.
+      OrdersFindNewByMagic();
+      OrdersActiveProcessConditions();
     }
+  }
+
+  /**
+   * Gets price stop value.
+   */
+  float PriceStop(ENUM_ORDER_TYPE _cmd, ENUM_ORDER_TYPE_VALUE _mode, int _method = 0, float _level = 0.0f,
+                  short _bars = 4) {
+    float _result = 0;
+    if (_method == 0) {
+      // Ignores calculation when method is 0.
+      return (float)_result;
+    }
+    Ref<Strategy> _strat_ref = strats.GetByKey(2);
     if (!_strat_ref.IsSet()) {
       // Returns false when strategy is not set.
       return false;
     }
+    _level = _level == 0.0f ? _strat_ref.Ptr().Get<float>(STRAT_PARAM_SOL) : _level;
+    _method = _strat_ref.Ptr().Get<int>(STRAT_PARAM_SOM);
+    //_shift = _shift == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SHIFT) : _shift;
+    _result = _strat_ref.Ptr().PriceStop(_cmd, _mode, _method, _level /*, _shift*/);
+    return (float)_result;
+  }
+
+  /**
+   * Check strategy's opening signal.
+   */
+  bool SignalOpen(ENUM_ORDER_TYPE _cmd, int _method, float _level = 0.0f, int _shift = 0) {
+    bool _result = true;
+    // uint _ishift = _indi.GetShift();
+    uint _ishift = _shift;
+    Ref<Strategy> _strat_ref = strats.GetByKey(2);
+    if (!_strat_ref.IsSet()) {
+      // Returns false when strategy is not set.
+      return false;
+    }
+    _level = _level == 0.0f ? _strat_ref.Ptr().Get<float>(STRAT_PARAM_SOL) : _level;
+    _method = _method == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SOM) : _method;
+    _shift = _shift == 0 ? _strat_ref.Ptr().Get<int>(STRAT_PARAM_SHIFT) : _shift;
+    _result &= _strat_ref.Ptr().SignalOpen(_cmd, _method, _level, _shift);
     return _result;
   }
 
@@ -348,8 +401,8 @@ class Stg_Meta_Delegate : public Strategy {
    * Check strategy's closing signal.
    */
   bool SignalClose(ENUM_ORDER_TYPE _cmd, int _method, float _level = 0.0f, int _shift = 0) {
-    bool _result = false;
-    _result = SignalOpen(Order::NegateOrderType(_cmd), _method, _level, _shift);
+    bool _result = true;
+    _result &= SignalOpen(Order::NegateOrderType(_cmd), _method, _level, _shift);
     return _result;
   }
 };
