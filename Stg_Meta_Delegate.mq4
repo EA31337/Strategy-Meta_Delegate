@@ -6,7 +6,7 @@
 
 /**
  * @file
- * Implements Conditions meta strategy.
+ * Implements Delegate meta strategy.
  */
 
 // Includes the main code.
